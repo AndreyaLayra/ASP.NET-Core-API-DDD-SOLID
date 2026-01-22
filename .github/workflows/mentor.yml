@@ -1,0 +1,33 @@
+name: Tech Mentor Agent
+
+on:
+    pull_request:
+        types: [opened, synchronize, reopened]
+
+jobs:
+    mentor-review:
+        runs-on: ubuntu-latest
+
+        permissions:
+            pull-requests: write
+            contents: read
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                python-version: "3.11"
+
+            - name: Install dependencies
+              run: |
+                pip install -r requirements.txt
+
+            - name: Run Tech Mentor
+              env:
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+              run: |
+                python mentor.py
