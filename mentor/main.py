@@ -60,7 +60,9 @@ _Last updated automatically after new changes were pushed._
         pr.create_issue_comment(final_body)
 
 
-def generate_review(openai_client, prompt):
+def generate_review(openai_client, prompt, diff):
+    rule_based_feedback = rule_based_review(diff)
+
     try:
         response = openai_client.chat.completions.create(
             model="gpt-4.1-mini",
@@ -68,29 +70,32 @@ def generate_review(openai_client, prompt):
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a thoughtful senior technical mentor. "
-                               "Provide constructive, practical, and kind feedback."
+                    "content": (
+                        "You are a thoughtful senior technical mentor. "
+                        "Complement the rule-based feedback below with deeper insights, "
+                        "suggest improvements, and keep a supportive tone."
+                    )
                 },
                 {
                     "role": "user",
-                    "content": prompt
+                    "content": (
+                        f"Rule-based analysis:\n{rule_based_feedback}\n\n"
+                        f"Pull Request context:\n{prompt}"
+                    )
                 }
             ],
         )
 
-        return response.choices[0].message.content.strip()
+        ai_feedback = response.choices[0].message.content.strip()
+
+        return f"{rule_based_feedback}\n\n---\n\n🤖 **AI Mentor Insights**\n\n{ai_feedback}"
 
     except RateLimitError:
         return (
-            "⚠️ **Mentor unavailable due to API quota limits**\n\n"
-            "The automated mentor could not generate a full review at this time.\n\n"
-            "**General feedback:**\n"
-            "- Review responsibility boundaries between layers.\n"
-            "- Ensure validations are placed in the appropriate application layer.\n"
-            "- Overall structure appears clean and readable.\n\n"
-            "_Once the API quota is restored, a full AI-powered review will be posted._"
+            f"{rule_based_feedback}\n\n---\n\n"
+            "⚠️ **AI Mentor unavailable due to API quota limits**\n"
+            "This review is based on static analysis rules only."
         )
-
 
 def main():
     github_token = os.getenv("GITHUB_TOKEN")
@@ -115,7 +120,7 @@ def main():
         diff=diff,
     )
 
-    review = generate_review(openai_client, prompt)
+    review = generate_review(openai_client, prompt, diff)
 
     post_or_update_comment(pr, review)
 
