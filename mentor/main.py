@@ -1,14 +1,18 @@
 import os
 import json
 from github import Github
-from openai import OpenAI
+from openai import OpenAI, RateLimitError
 from mentor.prompt import build_prompt
- 
+
 MENTOR_COMMENT_HEADER = "🧠 **Tech Mentor Agent**"
+
 
 def get_pull_request(github_client):
     repo_name = os.getenv("GITHUB_REPOSITORY")
     event_path = os.getenv("GITHUB_EVENT_PATH")
+
+    if not event_path:
+        raise RuntimeError("GITHUB_EVENT_PATH not found")
 
     with open(event_path, "r", encoding="utf-8") as file:
         event_data = json.load(file)
@@ -41,13 +45,13 @@ def find_existing_mentor_comment(pr):
 
 def post_or_update_comment(pr, review_text):
     final_body = f"""{MENTOR_COMMENT_HEADER}
-    
+
 {review_text}
 
 ---
 _Last updated automatically after new changes were pushed._
 """
-    
+
     existing_comment = find_existing_mentor_comment(pr)
 
     if existing_comment:
@@ -57,30 +61,46 @@ _Last updated automatically after new changes were pushed._
 
 
 def generate_review(openai_client, prompt):
-    response = openai_client.chat.completions.create(
-        model="gpt-4.1-mini",
-        temperature=0.3,
-        messages=[
-            {
-                "role": "system",
-                "content": "You are a thoughtful senior technical mentor."
-            },
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ],
-    )
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4.1-mini",
+            temperature=0.3,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a thoughtful senior technical mentor. "
+                               "Provide constructive, practical, and kind feedback."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+        )
 
-    return response.choices[0].message.content.strip()
+        return response.choices[0].message.content.strip()
+
+    except RateLimitError:
+        return (
+            "⚠️ **Mentor unavailable due to API quota limits**\n\n"
+            "The automated mentor could not generate a full review at this time.\n\n"
+            "**General feedback:**\n"
+            "- Review responsibility boundaries between layers.\n"
+            "- Ensure validations are placed in the appropriate application layer.\n"
+            "- Overall structure appears clean and readable.\n\n"
+            "_Once the API quota is restored, a full AI-powered review will be posted._"
+        )
 
 
 def main():
     github_token = os.getenv("GITHUB_TOKEN")
     openai_api_key = os.getenv("OPENAI_API_KEY")
 
-    if not github_token or not openai_api_key:
-        raise RuntimeError("Missing required environment variables.")
+    if not github_token:
+        raise RuntimeError("GITHUB_TOKEN is missing")
+
+    if not openai_api_key:
+        raise RuntimeError("OPENAI_API_KEY is missing")
 
     github_client = Github(github_token)
     openai_client = OpenAI(api_key=openai_api_key)
@@ -92,7 +112,7 @@ def main():
     prompt = build_prompt(
         pr_title=pr.title,
         pr_description=pr.body or "No description provided.",
-        diff=diff
+        diff=diff,
     )
 
     review = generate_review(openai_client, prompt)
