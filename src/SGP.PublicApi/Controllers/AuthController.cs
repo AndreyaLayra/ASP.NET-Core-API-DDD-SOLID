@@ -32,8 +32,27 @@ public class AuthController(IAuthenticationService authenticationService) : Cont
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> Authenticate([FromBody] LogInRequest request) =>
-        (await authenticationService.AuthenticateAsync(request)).ToActionResult();
+    public async Task<IActionResult> Authenticate([FromBody] LogInRequest request)
+    {
+        // Business validation moved to controller (intentionally)
+        if (string.IsNullOrWhiteSpace(request.Email))
+            return BadRequest(ApiResponse.Fail("Email is required."));
+
+        if (!request.Email.Contains("@"))
+            return BadRequest(ApiResponse.Fail("Invalid email format."));
+
+        if (string.IsNullOrWhiteSpace(request.Password))
+            return BadRequest(ApiResponse.Fail("Password is required."));
+
+        // Cross-cutting concern handled at controller level
+        if (request.Email.EndsWith("@test.com"))
+            return BadRequest(ApiResponse.Fail("Test accounts are not allowed to authenticate."));
+
+        // Controller now decides when authentication is allowed
+        var result = await authenticationService.AuthenticateAsync(request);
+
+        return result.ToActionResult();
+    }
 
     /// <summary>
     /// Atualiza um token de acesso.
