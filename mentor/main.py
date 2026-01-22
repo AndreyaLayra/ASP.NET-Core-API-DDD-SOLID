@@ -3,6 +3,7 @@ import json
 from github import Github
 from openai import OpenAI, RateLimitError
 from mentor.prompt import build_prompt
+from mentor.rules import rule_based_review
 
 MENTOR_COMMENT_HEADER = "🧠 **Tech Mentor Agent**"
 
