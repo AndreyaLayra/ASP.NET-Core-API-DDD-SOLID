@@ -29,5 +29,5 @@ jobs:
               env:
                 GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                 OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-              run: |
-                python mentor.py
+              run: 
+                python -m mentor.main
